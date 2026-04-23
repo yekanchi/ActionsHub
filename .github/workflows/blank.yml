@@ -1,0 +1,64 @@
+name: Expose HTTP Server (Manual Run)
+
+on:
+  workflow_dispatch:
+    # Optional: add inputs so you can customize the run
+    inputs:
+      duration:
+        description: 'How long to keep the server alive (minutes)'
+        required: false
+        default: '30'
+        type: string
+      port:
+        description: 'Port to expose'
+        required: false
+        default: '8080'
+        type: string
+
+jobs:
+  tunnel:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Checkout your code (only needed if you want to serve specific files)
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # 2. Start your HTTP server
+      - name: Start HTTP server on port ${{ inputs.port || '8080' }}
+        run: |
+          # You can change this to any HTTP server you want
+          # Examples:
+          # - Python: python3 -m http.server ${{ inputs.port || '8080' }}
+          # - Node.js: npx http-server -p ${{ inputs.port || '8080' }}
+          # - Ruby: ruby -run -e httpd . -p ${{ inputs.port || '8080' }}
+          
+          python3 -m http.server ${{ inputs.port || '8080' }} &
+          
+          # Give the server a moment to start
+          sleep 2
+
+      # 3. Expose the server to the internet
+      - name: Expose Tunnel
+        id: expose-tunnel
+        uses: codetalkio/expose-tunnel@v1
+        with:
+          service: bore.pub  # Free, no registration needed
+          port: ${{ inputs.port || '8080' }}
+
+      # 4. Show the public URL and keep the runner alive
+      - name: Server is live
+        run: |
+          echo "========================================="
+          echo "✅ Your HTTP server is now public!"
+          echo "📍 Public URL: ${{ steps.expose-tunnel.outputs.tunnel-url }}"
+          echo "⏱️  This URL will remain active for ${{ inputs.duration || '30' }} minutes"
+          echo "========================================="
+          echo ""
+          echo "Press Ctrl+C to stop the server (this will end the GitHub Actions job)"
+          echo ""
+          
+          # Convert minutes to seconds and keep the job alive
+          DURATION_SECONDS=$(( ${{ inputs.duration || '30' }} * 60 ))
+          sleep $DURATION_SECONDS
+          
+          echo "⏰ Time's up! The server has been shut down."
