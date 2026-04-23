@@ -1,0 +1,67 @@
+name: Advanced Command Runner
+
+on:
+  repository_dispatch:
+    types: [execute-command]
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up environment variables
+        run: |
+          echo "COMMAND=${{ github.event.client_payload.command }}" >> $GITHUB_ENV
+          echo "TIMEOUT=${{ github.event.client_payload.timeout || 300 }}" >> $GITHUB_ENV
+          echo "WORKING_DIR=${{ github.event.client_payload.working_dir || '.' }}" >> $GITHUB_ENV
+      
+      - name: Create output file
+        run: |
+          echo "Executing command: $COMMAND" > output.log
+          echo "Started at: $(date)" >> output.log
+          echo "----------------------------------------" >> output.log
+      
+      - name: Execute bash command
+        id: exec
+        run: |
+          cd "$WORKING_DIR"
+          timeout "$TIMEOUT" bash -c "$COMMAND" 2>&1 | tee -a output.log
+          exit_code=${PIPESTATUS[0]}
+          echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+          
+          if [ $exit_code -ne 0 ]; then
+            echo "Command failed with exit code: $exit_code" >> output.log
+          fi
+        continue-on-error: true
+      
+      - name: Save execution metadata
+        run: |
+          echo "----------------------------------------" >> output.log
+          echo "Finished at: $(date)" >> output.log
+          echo "Exit code: ${{ steps.exec.outputs.exit_code }}" >> output.log
+          echo "Command success: ${{ steps.exec.outcome }}" >> output.log
+      
+      - name: Upload execution logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: execution-logs-${{ github.run_id }}
+          path: output.log
+      
+      - name: Comment on dispatch event
+        if: github.event.client_payload.repository
+        uses: peter-evans/create-or-update-comment@v3
+        with:
+          repository: ${{ github.event.client_payload.repository }}
+          issue-number: ${{ github.event.client_payload.issue_number }}
+          body: |
+            ## Command Execution Result
+            
+            **Command:** `${{ github.event.client_payload.command }}`
+            
+            **Status:** ${{ steps.exec.outcome }}
+            
+            **Exit Code:** ${{ steps.exec.outputs.exit_code }}
+            
+            See [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for full logs.
