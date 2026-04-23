@@ -1,67 +1,58 @@
-name: Advanced Command Runner
+name: Run Bash Command
 
 on:
-  repository_dispatch:
-    types: [execute-command]
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'Bash command to execute'
+        required: true
+        type: string
+        default: 'echo "Hello World"'
 
 jobs:
-  execute:
+  execute-command:
     runs-on: ubuntu-latest
     
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up environment variables
+      - name: Display the command being executed
         run: |
-          echo "COMMAND=${{ github.event.client_payload.command }}" >> $GITHUB_ENV
-          echo "TIMEOUT=${{ github.event.client_payload.timeout || 300 }}" >> $GITHUB_ENV
-          echo "WORKING_DIR=${{ github.event.client_payload.working_dir || '.' }}" >> $GITHUB_ENV
+          echo "Executing command: ${{ github.event.inputs.command }}"
       
-      - name: Create output file
+      - name: Run bash command
+        id: run_command
         run: |
-          echo "Executing command: $COMMAND" > output.log
-          echo "Started at: $(date)" >> output.log
-          echo "----------------------------------------" >> output.log
-      
-      - name: Execute bash command
-        id: exec
-        run: |
-          cd "$WORKING_DIR"
-          timeout "$TIMEOUT" bash -c "$COMMAND" 2>&1 | tee -a output.log
-          exit_code=${PIPESTATUS[0]}
-          echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+          # Execute the command and capture output and exit code
+          set +e
+          OUTPUT=$(eval "${{ github.event.inputs.command }}" 2>&1)
+          EXIT_CODE=$?
+          set -e
           
-          if [ $exit_code -ne 0 ]; then
-            echo "Command failed with exit code: $exit_code" >> output.log
+          # Save outputs for later steps
+          echo "output<<EOF" >> $GITHUB_OUTPUT
+          echo "$OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+          
+          # Display output
+          echo "Command output:"
+          echo "$OUTPUT"
+          
+          # Display exit code
+          echo "Exit code: $EXIT_CODE"
+          
+          # Fail the step if command failed
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "Command failed with exit code $EXIT_CODE"
+            exit $EXIT_CODE
           fi
-        continue-on-error: true
       
-      - name: Save execution metadata
+      - name: Summarize results
+        if: always()
         run: |
-          echo "----------------------------------------" >> output.log
-          echo "Finished at: $(date)" >> output.log
-          echo "Exit code: ${{ steps.exec.outputs.exit_code }}" >> output.log
-          echo "Command success: ${{ steps.exec.outcome }}" >> output.log
-      
-      - name: Upload execution logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: execution-logs-${{ github.run_id }}
-          path: output.log
-      
-      - name: Comment on dispatch event
-        if: github.event.client_payload.repository
-        uses: peter-evans/create-or-update-comment@v3
-        with:
-          repository: ${{ github.event.client_payload.repository }}
-          issue-number: ${{ github.event.client_payload.issue_number }}
-          body: |
-            ## Command Execution Result
-            
-            **Command:** `${{ github.event.client_payload.command }}`
-            
-            **Status:** ${{ steps.exec.outcome }}
-            
-            **Exit Code:** ${{ steps.exec.outputs.exit_code }}
-            
-            See [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for full logs.
+          echo "## Command Execution Results" >> $GITHUB_STEP_SUMMARY
+          echo "**Command:** \`${{ github.event.inputs.command }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Exit Code:** ${{ steps.run_command.outputs.exit_code }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Output:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.run_command.outputs.output }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
