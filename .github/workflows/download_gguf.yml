@@ -1,36 +1,28 @@
-name: Download and archive Qwen3.5 4B GGUF
+name: Download and Archive GGUF Model
 
 on:
-  workflow_dispatch:          # Manual trigger
-  schedule:
-    - cron: '0 0 * * 0'       # Weekly run (optional)
+  workflow_dispatch:  # Manual trigger only
 
 jobs:
   download-and-zip:
     runs-on: ubuntu-latest
+
+    env:
+      # ⚠️ REPLACE THIS URL with the actual download link for Qwen3.5-4B-Q6_K.gguf
+      MODEL_URL: "https://huggingface.co/TheBloke/Qwen2.5-4B-GGUF/resolve/main/Qwen2.5-4B-Q6_K.gguf"
+      FILENAME: "Qwen3.5-4B-Q6_K.gguf"
+      ZIPNAME: "Qwen3.5-4B-Q6_K.zip"
+
     steps:
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+      - name: Download GGUF file
+        run: curl -L -o "${FILENAME}" "${MODEL_URL}"
 
-      - name: Install Hugging Face Hub CLI
-        run: pip install huggingface-hub
-
-      - name: Download 4-bit quantized GGUF model
-        run: |
-          hf download unsloth/Qwen3.5-4B-GGUF \
-            Qwen3.5-4B-Q4_K_M.gguf \
-            --local-dir ./model
-
-      - name: Zip the model file
-        run: |
-          cd model
-          zip ../qwen3.5-4b-q4.zip Qwen3.5-4B-Q4_K_M.gguf
+      - name: Zip the file
+        run: zip "${ZIPNAME}" "${FILENAME}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: qwen3.5-4b-q4-model
-          path: qwen3.5-4b-q4.zip
-          retention-days: 90
+          name: qwen-model
+          path: ${{ env.ZIPNAME }}
+          retention-days: 7   # Adjust as needed
