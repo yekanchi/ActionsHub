@@ -1,7 +1,9 @@
 name: Download and archive Qwen3.5 4B GGUF
 
 on:
-  workflow_dispatch:          # Allows manual trigger
+  workflow_dispatch:          # Manual trigger
+  schedule:
+    - cron: '0 0 * * 0'       # Weekly run (optional)
 
 jobs:
   download-and-zip:
@@ -15,12 +17,11 @@ jobs:
       - name: Install Hugging Face Hub CLI
         run: pip install huggingface-hub
 
-      - name: Download 4‑bit quantized GGUF model
+      - name: Download 4-bit quantized GGUF model
         run: |
           hf download unsloth/Qwen3.5-4B-GGUF \
             Qwen3.5-4B-Q4_K_M.gguf \
-            --local-dir ./model \
-            --local-dir-use-symlinks False
+            --local-dir ./model
 
       - name: Zip the model file
         run: |
@@ -32,4 +33,4 @@ jobs:
         with:
           name: qwen3.5-4b-q4-model
           path: qwen3.5-4b-q4.zip
-          retention-days: 90   # Optional, default is 90 days
+          retention-days: 90
