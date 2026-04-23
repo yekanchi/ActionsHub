@@ -1,28 +1,56 @@
-name: Download and Archive GGUF Model
+name: Download Qwen2.5 GGUF via Hugging Face Hub
 
 on:
-  workflow_dispatch:  # Manual trigger only
+  workflow_dispatch:  # Manual trigger
+
+env:
+  HF_REPO: "TheBloke/Qwen2.5-4B-GGUF"
+  HF_FILE: "Qwen2.5-4B-Q6_K.gguf"
+  LOCAL_FILENAME: "Qwen2.5-4B-Q6_K.gguf"
+  ZIPNAME: "Qwen2.5-4B-Q6_K.zip"
 
 jobs:
   download-and-zip:
     runs-on: ubuntu-latest
 
-    env:
-      # ⚠️ REPLACE THIS URL with the actual download link for Qwen3.5-4B-Q6_K.gguf
-      MODEL_URL: "https://huggingface.co/TheBloke/Qwen2.5-4B-GGUF/resolve/main/Qwen2.5-4B-Q6_K.gguf"
-      FILENAME: "Qwen3.5-4B-Q6_K.gguf"
-      ZIPNAME: "Qwen3.5-4B-Q6_K.zip"
-
     steps:
-      - name: Download GGUF file
-        run: curl -L -o "${FILENAME}" "${MODEL_URL}"
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Zip the file
-        run: zip "${ZIPNAME}" "${FILENAME}"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install huggingface_hub
+        run: pip install huggingface_hub
+
+      - name: Download GGUF file with huggingface_hub
+        run: |
+          python -c "
+          from huggingface_hub import hf_hub_download
+          hf_hub_download(
+              repo_id='${{ env.HF_REPO }}',
+              filename='${{ env.HF_FILE }}',
+              local_dir='.',
+              local_dir_use_symlinks=False
+          )
+          "
+
+      - name: Rename file (if needed)
+        run: |
+          # huggingface_hub downloads the file with its original name.
+          # If the file name is different, rename it.
+          if [[ -f "${{ env.HF_FILE }}" ]]; then
+            mv "${{ env.HF_FILE }}" "${{ env.LOCAL_FILENAME }}"
+          fi
+
+      - name: Zip the model file
+        run: zip "${{ env.ZIPNAME }}" "${{ env.LOCAL_FILENAME }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: qwen-model
           path: ${{ env.ZIPNAME }}
-          retention-days: 7   # Adjust as needed
+          retention-days: 7
